@@ -1,28 +1,20 @@
 services:
   - type: web
-    name: cpa-media-service
+    name: cpa-meta-service
     env: node
     region: oregon
     plan: starter
-    buildCommand: npm install && apt-get install -y yt-dlp || pip install yt-dlp
+    buildCommand: yarn install && pip install -U yt-dlp
     startCommand: npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 4000
+        value: 4001
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
-      - key: SOCIAVAULT_API_KEY
-        sync: false
-      - key: SOCIAVAULT_BASE_URL
-        sync: false
-      - key: SERVICE_SECRET
-        sync: false
-      - key: TEMP_DIR
-        value: /tmp/cpa-media
