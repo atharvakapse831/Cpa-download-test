@@ -1,14 +1,9 @@
 const { execFile } = require('child_process');
-const path = require('path');
-const { TEMP_DIR } = require('../config');
-const { v4: uuidv4 } = require('uuid');
 
-/**
- * Run yt-dlp with given args. Returns stdout as string.
- */
 function runYtDlp(args) {
   return new Promise((resolve, reject) => {
-    execFile('yt-dlp', args, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+    const bin = process.env.YTDLP_PATH || 'yt-dlp';
+    execFile(bin, args, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) return reject(new Error(stderr || err.message));
       resolve(stdout.trim());
     });
@@ -16,45 +11,36 @@ function runYtDlp(args) {
 }
 
 /**
- * Extract metadata for a reel URL via yt-dlp --dump-json.
- * Returns parsed JSON object.
+ * Extract full metadata for a reel URL.
+ * Returns normalised object.
  */
 async function extractInfo(url) {
   const raw = await runYtDlp(['--dump-json', '--no-playlist', url]);
-  return JSON.parse(raw);
+  const d   = JSON.parse(raw);
+
+  return {
+    id:          d.id,
+    title:       d.title || d.description || '',
+    description: d.description || '',
+    thumbnail:   d.thumbnail || (d.thumbnails?.[0]?.url) || null,
+    duration:    d.duration   || null,
+    uploader:    d.uploader   || d.channel || null,
+    uploader_id: d.uploader_id || d.channel_id || null,
+    view_count:  d.view_count  || null,
+    like_count:  d.like_count  || null,
+    upload_date: d.upload_date || null,
+    webpage_url: d.webpage_url || url,
+    ext:         d.ext || 'mp4',
+  };
 }
 
 /**
- * Download reel video to TEMP_DIR.
- * Returns { filePath, filename, info }
+ * Return just the raw thumbnail URL from metadata.
  */
-async function downloadVideo(url) {
-  const id = uuidv4();
-  // Output template: tmp/<uuid>.%(ext)s
-  const outputTemplate = path.join(TEMP_DIR, `${id}.%(ext)s`);
-
-  // Get info first so we know the final filename
+async function getRawThumbnailUrl(url) {
   const info = await extractInfo(url);
-  const ext = info.ext || 'mp4';
-  const filename = `${id}.${ext}`;
-  const filePath = path.join(TEMP_DIR, filename);
-
-  await runYtDlp([
-    '--no-playlist',
-    '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-    '-o', outputTemplate,
-    url,
-  ]);
-
-  return { filePath, filename, info };
+  if (!info.thumbnail) throw new Error('No thumbnail found in metadata');
+  return info.thumbnail;
 }
 
-/**
- * Get the thumbnail URL from yt-dlp metadata.
- */
-async function getThumbnailUrl(url) {
-  const info = await extractInfo(url);
-  return info.thumbnail || (info.thumbnails && info.thumbnails[0]?.url) || null;
-}
-
-module.exports = { extractInfo, downloadVideo, getThumbnailUrl };
+module.exports = { extractInfo, getRawThumbnailUrl };
